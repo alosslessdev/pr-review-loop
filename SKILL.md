@@ -1,0 +1,121 @@
+---
+name: pr-review-loop
+description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
+metadata:
+  version: "1"
+---
+
+# PR review loop
+
+The loop exists because "address the review comments" is not a task with an end; it is a state to
+reach and hold. This skill defines that state precisely, the polling cadence, and the coordination
+rules that stop several agents from fixing the same defect twice.
+
+## 1. Define the stop condition before starting
+
+A PR is done only when **all** hold, re-read from the live API rather than remembered:
+
+- CodeRabbit: `0 actionable`, `0 outside-diff`, `0 additional/unverified` findings on the **current
+  head**, and `0` unresolved review threads.
+- CodeRabbit ran on that head: check run `completed` with conclusion `success` and a title like
+  `Finished` / `Review completed`. `skipped`, `neutral`, `"Review rate limited"`, `"Review paused"`
+  do **not** count.
+- CI green on that head (no failed, no pending). A fork PR whose workflows sit in `action_required`
+  is *not* a failure — record the local gate as evidence instead.
+- `mergeable` true with no conflicts against `main`.
+- Every human review/comment addressed: implemented, or answered with the commit that already does it.
+
+Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —
+say so in the PR body and move on.
+
+## 2. Loop mechanics
+
+Iterate with a fixed interval (5 minutes is right: long enough for CI and CodeRabbit, short enough
+to react). Each iteration:
+
+1. Refresh state (see `scripts/prstate.py`).
+2. Fix conflicts: `git fetch origin main && git merge origin/main`, resolve preserving both intents,
+   fix merge fallout, run the gate, push. Never rebase or force-push a branch others build on.
+3. Fix CodeRabbit findings — inline threads **and** body-only sections (`Outside diff range
+   comments`, `Additional comments`, unverified findings). Reply in-thread with the fixing commit,
+   then resolve the thread. A finding that is factually wrong gets an evidence-backed reply, then
+   resolution.
+4. Fix CI failures from their logs (`gh run view <id> --log-failed`), never by weakening a test.
+5. Handle human reviews: implement each point, reply bullet-by-bullet, post `@<reviewer> ready`.
+6. CodeRabbit liveness: skipped/paused/rate-limited means it will not re-review on its own. Only
+   `@coderabbitai full review` re-triggers it; `@coderabbitai review` is ignored. Add
+   `@coderabbitai resume` when it reports paused.
+7. Sleep the interval. Rate-limited waits are **free time** — they do not consume iterations.
+
+Budgets exist only to stop runaway loops; when the user raises one, the loop continues. Never yield
+because of budget or a request cap: leave a precise hand-off and keep the state recoverable.
+
+Full protocol, including the exact wording to use on PRs: `references/loop-protocol.md`.
+
+## 3. Never trust a summary of state
+
+`prstate.py` aggregates CodeRabbit counts across the reviews on the **current head** and reports
+unresolved threads with their GraphQL ids, human reviews/comments, CI and mergeability. Two traps it
+exists to avoid:
+
+- CodeRabbit posts empty stub reviews after a real one; picking "the newest review" hides findings.
+  Aggregate per head instead.
+- A body count can outlive its threads. Cross-check `unresolved_threads` before believing
+  `actionable: N`.
+
+Verify claims about other PRs the same way — a sibling's "done" is a claim, not evidence.
+
+## 4. Coordinate, do not duplicate
+
+One agent per PR. When PRs share code (stacks, duplicated files), findings repeat across them:
+
+- Maintain `scripts/findings-registry.md`-style rows: PR, file:line, finding, owning PR, status,
+  commit. Claim before fixing; anyone else replies with the owner's commit and resolves.
+- The owning slice fixes; every other PR points. Duplicate *code* is acceptable; duplicate *fixes*
+  are not.
+- Shared review quotas (CodeRabbit OSS) are a queue: one outstanding `full review` across the
+  stack, ordered by dependency. Parallel requests starve everyone.
+- Send a finding to its owner directly rather than writing a second implementation.
+
+`references/coordination.md` has the registry format and the messaging pattern.
+
+## 5. Splitting a monolithic PR
+
+A 74k-line PR is not reviewable; the repo's own merged-PR median is ~75 lines. Split it so each PR
+merges independently:
+
+- Size each slice against what the repo actually merges (measure: median and max of recent merged
+  PRs), not against what feels small.
+- Prefer a **single prerequisite** (the crate/parser/type core) plus leaves that depend only on it,
+  so out-of-order merges cost a red check, never a conflict.
+- Prove slice independence mechanically: own files per branch (`git log --no-merges <base>..<branch>`
+  minus the prerequisite's files) must be pairwise disjoint.
+- Shared registry files (`eval.rs` dispatch arrays, `catalog.rs` rows) get one inert marker line per
+  slice in the prerequisite, which each slice replaces — otherwise every pair of slices conflicts.
+- Only the prerequisite may create the crate/`Cargo.toml` stanza. Every other PR shows only its own
+  change; that is exactly what reviewers ask for on stacked PRs.
+- Prove coverage before closing the monolith: the union of the split PRs' changed files must **equal**
+  the monolith's file set. Close the monolith as superseded, with the split map as the closing
+  comment, and post the same map on the tracking issue.
+
+`references/stacked-pr-split.md` carries the full playbook, including the replay problem (fixes made
+on the monolith after a slice forked) and why cherry-picks may be impossible.
+
+## 6. Rules that keep the branch mergeable
+
+- Read-only upstream: an author account often has `pull` only. Push to the fork, never to `main`, and
+  never plan around "we will merge X first" — merging is the maintainer's action.
+- No `unwrap()`/`expect()`/`panic!` outside tests, no `unsafe`; never break wasm builds.
+- Every fix carries the test that would have caught it; prove it fails before the fix.
+- Regenerate generated docs (`cargo xtask parity`, keytips, i18n) rather than hand-editing counts. A
+  Windows checkout with `core.autocrlf=true` can report a false "stale" — regenerate and confirm
+  `git diff` is empty.
+- Record each iteration in a log file per PR: head, commits, findings, gate results. Hand-offs are
+  only useful if they are factual.
+
+## 7. Do not
+
+- Do not close a PR, force-push a shared branch, or delete a test to make CI pass.
+- Do not treat a green check run from a prerequisite's commit as your PR's review.
+- Do not let a "stable" report from another agent end your loop; re-read the live state.
+- Do not read images on a runtime that cannot accept image input; assert on artifacts in tests.
