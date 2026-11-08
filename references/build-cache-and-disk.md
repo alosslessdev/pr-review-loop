@@ -42,7 +42,12 @@ Honest limits:
 
 1. `df -h` before starting a build; stop and clean if free space is under ~10% of the volume.
 2. One `target/` per worktree, never a shared `CARGO_TARGET_DIR` across concurrent agents — cargo
-   serialises on the lock and turns parallel work into a queue.
+   serialises on the lock and turns parallel work into a queue. **And never share one across
+   branches:** rlibs of workspace crates are keyed by path, so a worktree that reuses another branch's
+   target dir links *that* branch's `gridcraft-chart`/`-engine` and you get phantom failures *and*
+   phantom passes. Reference case: a merged tree "failed" a ribbon assertion because the engine rlib
+   came from a sibling branch; `cargo clean -p <every workspace crate>` plus a rebuild from the tree
+   under test made it pass, with no source change. Sharing is only safe for registry dependencies.
 3. Delete a worktree's `target/` as soon as that PR is at its stop condition; keep the worktree for
    git operations.
 4. `CARGO_PROFILE_DEV_DEBUG=0` and `CARGO_INCREMENTAL=0` in agent environments: smaller artifacts,
