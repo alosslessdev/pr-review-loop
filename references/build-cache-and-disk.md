@@ -105,3 +105,23 @@ What actually works, cheapest first:
 
 Note this interacts with parallel agents: several builds writing executables at once raise the chance
 of a scan collision, so `-j 4` (or lower) is steadier than a full-core build.
+
+
+## When the local gate cannot run at all
+
+Some environments make `cargo xtask ci` (or any workspace-wide clippy/test) impossible: the endpoint
+scanner holds freshly linked build scripts, `link.exe` fails with 1104, and the step dies before our
+crates compile. Four retries, `-j 2`, RUSTFLAGS changes and sccache do not fix it.
+
+Do not fake it and do not block the PR on it. Instead:
+
+1. Run the **touched-crate** gate locally and keep it green: `cargo fmt --all`,
+   `cargo clippy -p <crates> --all-targets -- -D warnings`, `cargo test -p <crates>`.
+2. Rely on the **hosted `gate` job** as the authoritative full run — on a fork PR it needs maintainer
+   approval (`action_required`); say so and point at the workflow run rather than claiming CI.
+3. State the situation in the PR body's verification block: which steps ran locally, with exit codes,
+   and that the full `cargo xtask ci` is covered by the hosted `gate` job, naming the environment
+   blocker (not "could not run").
+4. Record it in the loop log so the next agent does not burn an hour rediscovering it.
+
+A blocker you can name with evidence is honest; a partial run reported as "green" is not.
