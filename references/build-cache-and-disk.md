@@ -75,7 +75,11 @@ while PowerShell runs the same file fine. The binary itself is intact — PowerS
 executes it.
 
 Diagnosis: the scanner inspects freshly written PE files and briefly denies read/execute; bash in this
-harness surfaces that as 127, cargo as os error 32/5. It is not the disk, not `target/`, and not
+harness surfaces that as 127, cargo as os error 32/5. On the reference box the holder was identified
+precisely — **Bitdefender Endpoint Security Service (`EPSecurityService`)**, confirmed with Restart
+Manager (`Get-Process -Id … | Select-Object -ExpandProperty Modules`, or `handle.exe`), locking freshly
+linked `serde`/`serde_core` build-script images across *every* fresh target dir (`target/`, `t2/`,
+`t3/`). It is not the disk, not `target/`, and not
 sccache: `cargo clean`, a fresh target dir and a retry of the same command do not always clear it.
 
 What actually works, cheapest first:
@@ -88,9 +92,16 @@ What actually works, cheapest first:
    cache every time.
    `CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG/OPT_LEVEL` does **not** help on MSVC: debuginfo lives in the
    `.pdb`, so the `.exe` stays byte-identical.
-4. Adding a Defender exclusion would be the clean fix, but needs admin (`Add-MpPreference` fails with
-   "You don't have enough permissions", and `Get-MpPreference` can fail outright with `0x800106ba`
-   when Defender is disabled in favour of a third-party product).
+4. **Seed the target dir from an already-scanned build of the same commit** — artifacts that a scan has
+   already released keep working, so copying `target/` from a sibling worktree at the same head lets
+   the gate run. This is what unblocked the reference box's `dax` gate while `cargo xtask ci` still
+   could not link fresh build scripts.
+5. Retrying with a *different* crate order or `-j 1` sometimes slips past the lock window; both are
+   cheaper than a flag change.
+6. Adding an antivirus exclusion would be the clean fix but needs admin (`Add-MpPreference` fails with
+   "You don't have enough permissions"; `Get-MpPreference` can fail with `0x800106ba` when Defender is
+   disabled in favour of a third-party product such as Bitdefender). Escalate to the machine owner —
+   this is not something the loop can fix.
 
 Note this interacts with parallel agents: several builds writing executables at once raise the chance
 of a scan collision, so `-j 4` (or lower) is steadier than a full-core build.
