@@ -159,8 +159,9 @@ on the monolith after a slice forked) and why cherry-picks may be impossible.
 ## 5b. Builds: cache them, and watch the disk
 
 Several PRs in parallel means several `target/` trees; the reference run filled the volume to 100% and
-a full disk corrupted cargo metadata in a way that reads like a code failure. Before a build:
-`df -h`. Use `sccache` (`RUSTC_WRAPPER`) with `CARGO_INCREMENTAL=0` and `CARGO_PROFILE_DEV_DEBUG=0`
+a full disk corrupted cargo metadata in a way that reads like a code failure — and on a Windows box a
+third-party endpoint scanner intermittently refuses to execute a freshly written build script
+(`os error 32`/`5`, bash exit 127), which is not a code failure either. Before a build: `df -h`. Use `sccache` (`RUSTC_WRAPPER`) with `CARGO_INCREMENTAL=0` and `CARGO_PROFILE_DEV_DEBUG=0`
 so a deleted `target/` does not cost a cold rebuild, one `target/` per worktree (never a shared
 `CARGO_TARGET_DIR` across concurrent agents), and delete a worktree's `target/` once that PR is at its
 stop condition. Details and the verified numbers: `references/build-cache-and-disk.md`.

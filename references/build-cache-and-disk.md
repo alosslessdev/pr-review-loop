@@ -51,3 +51,38 @@ Honest limits:
    code bug.
 6. Check `git status` before assuming a failed build means a bad edit: a half-written target can fail
    any crate.
+
+
+## Freshly built executables that will not run (Windows endpoints)
+
+Observed on a Windows box with a third-party endpoint scanner:
+
+```
+error: could not execute process `.../build/serde_core-*/build-script-build` (never executed)
+Caused by: ... (os error 32)   # or (os error 5)
+```
+
+and, in a bash shell, `command not found` (exit 127) when launching any *newly written* executable,
+while PowerShell runs the same file fine. The binary itself is intact — PowerShell reports its size and
+executes it.
+
+Diagnosis: the scanner inspects freshly written PE files and briefly denies read/execute; bash in this
+harness surfaces that as 127, cargo as os error 32/5. It is not the disk, not `target/`, and not
+sccache: `cargo clean`, a fresh target dir and a retry of the same command do not always clear it.
+
+What actually works, cheapest first:
+
+1. **Retry the build.** The denial is usually transient — the same target dir builds moments later.
+2. **Run manual executables through PowerShell**, not bash: `powershell -NoProfile -Command "& '.\path\to.exe'"`.
+3. **Change the build-script binary's content** so it is not the blocked file:
+   `export RUSTFLAGS="-C opt-level=1"`. This changes every rustc invocation, so it **resets the sccache
+   keys** — pick one RUSTFLAGS value for the machine and keep it; toggling per build gives you a cold
+   cache every time.
+   `CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG/OPT_LEVEL` does **not** help on MSVC: debuginfo lives in the
+   `.pdb`, so the `.exe` stays byte-identical.
+4. Adding a Defender exclusion would be the clean fix, but needs admin (`Add-MpPreference` fails with
+   "You don't have enough permissions", and `Get-MpPreference` can fail outright with `0x800106ba`
+   when Defender is disabled in favour of a third-party product).
+
+Note this interacts with parallel agents: several builds writing executables at once raise the chance
+of a scan collision, so `-j 4` (or lower) is steadier than a full-core build.
