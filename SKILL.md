@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "3"
+  version: "4"
 ---
 
 # PR review loop
@@ -17,9 +17,10 @@ A PR is done only when **all** hold, re-read from the live API rather than remem
 
 - CodeRabbit: `0 actionable`, `0 outside-diff`, `0 additional/unverified` findings on the **current
   head**, and `0` unresolved review threads.
-- CodeRabbit ran on that head: check run `completed` with conclusion `success` and a title like
-  `Finished` / `Review completed`. `skipped`, `neutral`, `"Review rate limited"`, `"Review paused"`
-  do **not** count.
+- CodeRabbit ran on that head: `cr.review_state` is `final` — check run `completed` with conclusion
+  `success` and a title like `Finished` / `Review completed`. `skipped`, `neutral`,
+  `"Review rate limited"`, `"Review paused"` do **not** count; a paused series means nobody will ever
+  review that head until `@coderabbitai resume` is posted.
 - CI green on that head (no failed, no pending). A fork PR whose workflows sit in `action_required`
   is *not* a failure — record the local gate as evidence instead.
 - `mergeable` true with no conflicts against `main`.
@@ -72,8 +73,11 @@ to react). Each iteration:
 4. Fix CI failures from their logs (`gh run view <id> --log-failed`), never by weakening a test.
 5. Handle human reviews: implement each point, reply bullet-by-bullet, post `@<reviewer> ready`.
 6. CodeRabbit liveness: skipped/paused/rate-limited means it will not re-review on its own. Only
-   `@coderabbitai full review` re-triggers it; `@coderabbitai review` is ignored. Add
-   `@coderabbitai resume` when it reports paused.
+   `@coderabbitai full review` re-triggers a review; `@coderabbitai review` is ignored. **A paused
+   series needs `@coderabbitai resume` first** — CodeRabbit says "reviews paused" at the top of its
+   summary and its check run reads `Review paused` / `Skipped`. `prstate.py` reports this as
+   `cr.review_state: "paused"` plus a blocker; resume, then request the full review. In a stack one
+   pause can stall every PR, so sweep them (`pr-backlog-audit`'s `resume_paused.py`).
 7. Sleep the interval. Rate-limited waits are **free time** — they do not consume iterations.
 
 Budgets exist only to stop runaway loops; when the user raises one, the loop continues. Never yield

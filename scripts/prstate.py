@@ -117,7 +117,21 @@ def gather(repo, pr, me=None):
         for c in cr_runs
     )
 
-    if not bodies and not cr_final and newest:
+    # A paused review series stalls every PR in the stack: CodeRabbit says "reviews paused" at the
+    # top of its summary and its check run reads "Review paused" / "Skipped". Only
+    # `@coderabbitai resume` restarts it.
+    pause_re = re.compile(r"paused|rate limit|review skipped|reviews (?:are )?paused", re.I)
+    run_paused = any(pause_re.search(((c.get("output") or {}).get("title") or "")
+                                     + ((c.get("output") or {}).get("summary") or ""))
+                     for c in cr_runs if c.get("status") == "completed")
+    cr_issues = [c for c in paginated(f"repos/{repo}/issues/{pr}/comments?per_page=100")
+                 if (c.get("user") or {}).get("login") in BOTS]
+    comment_paused = any(pause_re.search(c.get("body") or "") for c in cr_issues[-6:]) if cr_issues else False
+    in_progress = any(c.get("status") != "completed" for c in cr_runs)
+    review_state = ("final" if cr_final else
+                    "in_progress" if in_progress else
+                    "paused" if (run_paused or comment_paused) else "none")
+    if not bodies and review_state == "none" and newest:
         bodies = [newest.get("body") or ""]
 
     actionable = count([r"Actionable comments posted:\s*(\d+)"], bodies)
@@ -186,6 +200,8 @@ def gather(repo, pr, me=None):
         "pr": pr, "repo": repo, "head": sha, "branch": pull["head"]["ref"],
         "mergeable": pull.get("mergeable"), "merge_state": pull.get("mergeable_state"),
         "cr": {
+            "review_state": review_state,
+            "paused": review_state == "paused",
             "on_head": bool(on_head) or cr_final,
             "run_final": cr_final,
             "newest_review_at": (newest or {}).get("submittedAt"),
@@ -214,6 +230,8 @@ def gather(repo, pr, me=None):
     b = out["blockers"]
     if actionable or outside or additional:
         b.append(f"coderabbit: {actionable} actionable / {outside} outside-diff / {additional} additional")
+    if out["cr"]["paused"]:
+        b.append("coderabbit: reviews paused on this head (post '@coderabbitai resume')")
     if out["unresolved_threads"]:
         b.append(f"threads: {len(out['unresolved_threads'])} unresolved")
     if blocking_reviews:
