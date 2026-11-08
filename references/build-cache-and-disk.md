@@ -49,6 +49,14 @@ Honest limits:
    fewer rebuilds.
 5. If a build fails with corrupt metadata, delete that `target/` and rebuild — do not chase it as a
    code bug.
+6. **A full volume can damage a worktree, not just a build.** Observed at 568 MB free: `.git` plus
+   2 532 tracked files vanished from the worktree, and a test failed with `could not execute process …
+   The system cannot find the file specified`. Recovery: `git checkout -f HEAD -- .` restores every
+   tracked file from the object store; the branch is fine. Check `git status` before believing a file
+   is gone.
+7. When several agents build at once, a test that grants a spawned process a fixed timeout (30 s
+   startup checks, timing assertions) can fail purely from load. Re-run it serially before treating it
+   as a code failure — the reference run had 18 concurrent cargo builds.
 6. Check `git status` before assuming a failed build means a bad edit: a half-written target can fail
    any crate.
 
