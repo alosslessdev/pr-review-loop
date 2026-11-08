@@ -38,6 +38,9 @@ python scripts/prstate.py 1234 --repo owner/name
 - **An explicit stop condition.** Zero actionable / outside-diff / additional findings on the current
   head, zero open threads, a CodeRabbit run that completed `success` on that head, CI green,
   mergeable, human asks answered. Nitpicks never block.
+- **Blockers, not vibes.** `prstate.py` returns a `blockers` list — CodeRabbit counts, unresolved
+  threads, `CHANGES_REQUESTED` reviews, failed checks, "no workflow ran on this head", merge
+  conflicts, and unchecked PR-template items.
 - **State is aggregated, not guessed.** CodeRabbit posts empty stub reviews after a real one; picking
   "the newest review" hides findings. `prstate.py` aggregates per head and cross-checks unresolved
   threads, so a stale body count is not mistaken for work.
@@ -48,6 +51,9 @@ python scripts/prstate.py 1234 --repo owner/name
   fixes are not.
 - **Shared quotas are a queue.** Ten PRs requesting reviews in parallel starve each other; requests
   go out one at a time, dependency order first.
+- **The repo's gate is the gate.** Run the documented quality command end to end (`cargo xtask ci`
+  or equivalent), record per-step exit codes, tick only genuinely passing checklist items, and answer
+  the blocking review with that evidence. A partial run is not evidence.
 - **Splitting is mechanical, not vibes.** Size slices against the repository's real merged-PR ceiling;
   prove own-file disjointness, coverage equality, and "only the prerequisite creates the crate" before
   opening anything; close the monolith as superseded with the split map.

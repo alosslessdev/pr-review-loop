@@ -8,7 +8,10 @@ Reports the things the loop actually gates on, and nothing that needs interpreta
   * unresolved review threads with their GraphQL ids (needed to resolve them);
   * human reviews and comments (excluding bots and yourself);
   * CI failures and pending checks on the head;
-  * mergeability.
+  * mergeability, the GitHub review decision, and whether CI actually ran on this fork PR.
+
+Anything that blocks a maintainer's approval is collected in `blockers`, so the loop can gate on a
+short list instead of re-deriving it from counts.
 
 Usage:
     python prstate.py <PR> [--repo OWNER/NAME]
@@ -69,7 +72,7 @@ def count(patterns, bodies):
     return best
 
 
-FIELDS = """headRefOid mergeable mergeStateStatus
+FIELDS = """headRefOid mergeable mergeStateStatus reviewDecision
 reviews(last:50){nodes{author{login} state body submittedAt commit{oid}}}
 reviewThreads(first:100){nodes{id isResolved isOutdated path line
   comments(first:40){nodes{id author{login} path line body createdAt url}}}}"""
@@ -106,6 +109,9 @@ def main():
     g = ((g.get("data") or {}).get("repository") or {}).get("pullRequest") or {}
 
     runs = (ghj("api", f"repos/{repo}/commits/{sha}/check-runs?per_page=100") or {}).get("check_runs", [])
+    suites = (ghj("api", f"repos/{repo}/commits/{sha}/check-suites") or {}).get("check_suites", [])
+    statuses = ghj("api", f"repos/{repo}/commits/{sha}/status") or {}
+    wf_runs = (ghj("api", f"repos/{repo}/actions/runs?head_sha={sha}&per_page=50") or {}).get("workflow_runs", [])
     reviews = [r for r in (g.get("reviews", {}).get("nodes") or [])
                if (r.get("author") or {}).get("login") in BOTS]
     on_head = [r for r in reviews if (r.get("commit") or {}).get("oid") == sha]
@@ -169,6 +175,18 @@ def main():
                       "url": c.get("html_url"), "path": c.get("path"),
                       "body": (c.get("body") or "")[:1500]})
 
+    body = pull.get("body") or ""
+    checklist = {
+        "total": len(re.findall(r"^- \[ \]", body, re.M)) + len(re.findall(r"^- \[x\]", body, re.M | re.I)),
+        "unchecked": len(re.findall(r"^- \[ \]", body, re.M)),
+    }
+
+    review_decision = (g.get("reviewDecision") or "").strip()
+    blocking_reviews = [r for r in human_reviews if (r.get("state") or "").upper() == "CHANGES_REQUESTED"]
+    repo_checks = [c for c in runs if not c.get("name", "").lower().startswith("coderabbit")]
+    wf_planned = [w for w in wf_runs if (w.get("conclusion") or "") == "action_required"]
+    ci_absent = not repo_checks and (not wf_runs or len(wf_planned) == len(wf_runs))
+
     cross = [{"number": (e.get("source") or {}).get("issue", {}).get("number"),
               "title": (e.get("source") or {}).get("issue", {}).get("title"),
               "state": (e.get("source") or {}).get("issue", {}).get("state")}
@@ -190,6 +208,13 @@ def main():
         "human_reviews": human_reviews,
         "human_comments": human,
         "cross_refs": [c for c in cross if c.get("number")],
+        "review": {
+            "decision": review_decision or ("CHANGES_REQUESTED" if blocking_reviews else None),
+            "blocking_reviews": [{"author": r["author"], "at": r["at"]} for r in blocking_reviews],
+        },
+        "checklist": checklist,
+        "ci_absent": ci_absent,
+        "blockers": [],
         "ci": {
             "total": len(runs),
             "failed": [{"name": c["name"], "url": c["html_url"]} for c in runs
@@ -197,6 +222,22 @@ def main():
             "pending": [c["name"] for c in runs if c.get("status") != "completed"],
         },
     }
+    b = out["blockers"]
+    if actionable or outside or additional:
+        b.append(f"coderabbit: {actionable} actionable / {outside} outside-diff / {additional} additional")
+    if out["unresolved_threads"]:
+        b.append(f"threads: {len(out['unresolved_threads'])} unresolved")
+    if blocking_reviews:
+        b.append("review: CHANGES_REQUESTED by " + ", ".join(r["author"] for r in blocking_reviews))
+    if out["ci"]["failed"]:
+        b.append("ci: " + ", ".join(c["name"] for c in out["ci"]["failed"]))
+    if ci_absent:
+        b.append("ci: no workflow ran on this head (action_required / empty status)")
+    if pull.get("mergeable") is False:
+        b.append("merge: conflicts with the base branch")
+    if checklist["unchecked"]:
+        b.append(f"checklist: {checklist['unchecked']} unchecked item(s) in the PR body")
+
     print(json.dumps(out, indent=1))
     return 0
 

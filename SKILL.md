@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "1"
+  version: "2"
 ---
 
 # PR review loop
@@ -27,6 +27,29 @@ A PR is done only when **all** hold, re-read from the live API rather than remem
 
 Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —
 say so in the PR body and move on.
+
+## 1b. Two gates that are not CodeRabbit
+
+**The maintainer's own gate.** A repo usually has a documented quality command —
+`cargo xtask ci`, `make check`, `npm run ci`. Run it **in full and early**, not "the touched crates
+only". A partial run is not evidence, and reviewers block on exactly that:
+
+> `cargo xtask ci` is incomplete or unchecked on this PR. Run it end to end (fmt, clippy, tests,
+> assets, brands, layers, wasm), tick the checklist when green, and reply here with the outcome.
+
+When a PR template carries a checklist, tick only what actually passed this run, leave anything
+pre-existing unticked with its evidence beside it, and answer the review with the commands, per-step
+exit codes and head SHA. Never tick an item on a partial run; never mark a step green because it
+"should" pass.
+
+**Human review state.** `CHANGES_REQUESTED` is a blocking gate even when every CodeRabbit count is
+zero. Read `reviewDecision` and each human review's state every iteration; an `APPROVED` from before
+your last push is stale. Reply *to the review* (not just a PR comment) and address the reviewer.
+
+**Fork CI is not green, it is absent.** A fork PR often shows only CodeRabbit in `gh pr checks`, with
+the combined status `pending` because `total_count` is 0 and the workflow runs sit in
+`action_required`. That means nothing ran. Say so explicitly, attach the local gate transcript, and
+do not record it as a pass.
 
 ## 2. Loop mechanics
 
@@ -62,6 +85,11 @@ exists to avoid:
   Aggregate per head instead.
 - A body count can outlive its threads. Cross-check `unresolved_threads` before believing
   `actionable: N`.
+
+It also returns a `blockers` list — actionable/outside-diff/additional counts, unresolved threads,
+`CHANGES_REQUESTED` reviews, failed checks, "no workflow ran on this head", merge conflicts, and
+unchecked PR-template items. Gate on that list; it is the short form of everything a maintainer will
+refuse to approve.
 
 Verify claims about other PRs the same way — a sibling's "done" is a claim, not evidence.
 
@@ -106,7 +134,10 @@ on the monolith after a slice forked) and why cherry-picks may be impossible.
 - Read-only upstream: an author account often has `pull` only. Push to the fork, never to `main`, and
   never plan around "we will merge X first" — merging is the maintainer's action.
 - No `unwrap()`/`expect()`/`panic!` outside tests, no `unsafe`; never break wasm builds.
-- Every fix carries the test that would have caught it; prove it fails before the fix.
+- Every fix carries the test that would have caught it; prove it fails before the fix — per hunk.
+  Check out the branch, revert one hunk at a time, and confirm the test that is supposed to cover
+  that hunk goes red. A PR body that says "both tests fail without the fix" is often wrong by the
+  time the branch has other fixes in it; correct the claim rather than repeating it.
 - Regenerate generated docs (`cargo xtask parity`, keytips, i18n) rather than hand-editing counts. A
   Windows checkout with `core.autocrlf=true` can report a false "stale" — regenerate and confirm
   `git diff` is empty.
@@ -119,3 +150,6 @@ on the monolith after a slice forked) and why cherry-picks may be impossible.
 - Do not treat a green check run from a prerequisite's commit as your PR's review.
 - Do not let a "stable" report from another agent end your loop; re-read the live state.
 - Do not read images on a runtime that cannot accept image input; assert on artifacts in tests.
+- Do not accept a hand-off that contains only prose. If a run produced no diff, no commit and no
+  PR state change, it did not happen: re-run it with the method rule "read → edit → run the smallest
+  proving test", not with a fresh plan.

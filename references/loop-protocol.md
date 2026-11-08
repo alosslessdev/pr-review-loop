@@ -52,6 +52,61 @@ gh run view <run_id> --repo OWNER/REPO --log-failed
 git push <remote> HEAD:<branch>
 ```
 
+## The repo's own gate (do not skip it)
+
+Find the documented quality command in `AGENTS.md` / `CONTRIBUTING.md` / CI workflow — in the craft
+repos it is `cargo xtask ci` (fmt, clippy `-D warnings`, tests, doctests, assets, brands, layers,
+wasm, cleanroom). Run it **end to end** on the head you are about to push, not just the touched
+crates. Record, per step: command, exit code, first failing output.
+
+```bash
+cargo xtask ci 2>&1 | tee /tmp/xtask-ci.log; echo "exit=$?"
+# or step by step, same order, recording each:
+cargo fmt --all -- --check; echo "fmt=$?"
+cargo clippy --workspace --all-targets -- -D warnings; echo "clippy=$?"
+cargo test --workspace --all-targets; echo "test=$?"
+cargo xtask assets; cargo xtask brands; cargo xtask layers; cargo xtask wasm; cargo xtask cleanroom
+```
+
+If a step fails and it is not your change, prove it on upstream `main` (scratch worktree or stash,
+same command) and report both outputs. Do not "fix" it in your PR and do not tick it.
+
+PR checklists: `gh pr view <PR> --json body` then tick only what passed —
+
+```bash
+gh pr view 1234 --json body --jq .body > body.md   # edit "- [ ]" → "- [x]" for green steps only
+gh pr edit 1234 --body-file body.md
+```
+
+Then reply **to the blocking review**, naming the reviewer, with commands, per-step results and the
+head SHA. A general PR comment is not an answer to a `CHANGES_REQUESTED` review.
+
+## Human review state is a gate
+
+Every iteration, read it — not once at the start:
+
+```bash
+gh pr view 1234 --json reviewDecision,reviews \
+  --jq '{decision: .reviewDecision, reviews: [.reviews[]|{a:.author.login,s:.state,at:.submittedAt,commit:(.commitId // "")}]}'
+```
+
+- `reviewDecision: CHANGES_REQUESTED` blocks regardless of CodeRabbit counts.
+- An `APPROVED` from before your latest push is stale; treat the head as unreviewed.
+- The reviewer's asks are the work list: implement, then answer bullet-by-bullet, then `@<login> ready`.
+- `Status: waiting_author` inside a review body means exactly that: the author must act.
+
+## Fork CI: absent is not green
+
+```bash
+gh pr checks 1234                       # may list only CodeRabbit
+gh api repos/OWNER/REPO/commits/<sha>/check-suites --jq '.check_suites[]|"\(.app.slug) \(.status) \(.conclusion)"'
+gh api repos/OWNER/REPO/actions/runs?head_sha=<sha> --jq '.workflow_runs[]|"\(.name) \(.status) \(.conclusion)"'
+```
+
+`action_required` on every workflow, an empty `/statuses` (`total_count: 0`), and a `pending`
+combined status mean: no CI ran. Record it as absent, attach the local gate transcript, and expect a
+maintainer to ask for exactly that.
+
 ## Wording for the PR body
 
 State the stacked/limited situation explicitly so the maintainer does not read stale counts as open
