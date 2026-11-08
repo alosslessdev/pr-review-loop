@@ -30,7 +30,8 @@ The agent reads `SKILL.md`, then `references/loop-protocol.md`, and runs `script
 the live gate state.
 
 ```bash
-python scripts/prstate.py 1234 --repo owner/name
+python scripts/prstate.py 1234 --repo owner/name      # one PR: state + blockers
+python scripts/audit_prs.py --repo owner/name         # every open PR: findings that were never closed
 ```
 
 ## What makes this different from "please fix the review"
@@ -66,7 +67,8 @@ python scripts/prstate.py 1234 --repo owner/name
 | `references/loop-protocol.md` | full per-iteration protocol, commands, wording, failure modes |
 | `references/stacked-pr-split.md` | how to cut a 180-file PR into ten mergeable PRs, with the invariant checks |
 | `references/coordination.md` | findings registry, shared quotas, fan-out discipline, hand-offs |
-| `scripts/prstate.py` | compact live state for one PR (head, findings, threads, CI, mergeability) |
+| `scripts/prstate.py` | compact live state for one PR (head, findings, threads, review decision, CI, blockers) |
+| `scripts/audit_prs.py` | backlog audit across open PRs: every body-only finding with closure evidence |
 
 ## Licence
 

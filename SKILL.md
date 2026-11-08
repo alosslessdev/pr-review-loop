@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "2"
+  version: "3"
 ---
 
 # PR review loop
@@ -80,6 +80,22 @@ Budgets exist only to stop runaway loops; when the user raises one, the loop con
 because of budget or a request cap: leave a precise hand-off and keep the state recoverable.
 
 Full protocol, including the exact wording to use on PRs: `references/loop-protocol.md`.
+
+## 2b. Audit the whole backlog, not just the PR you were asked about
+
+A vanished finding is invisible per-PR: you have to look for it. Before declaring a repo clean, run
+`scripts/audit_prs.py --repo OWNER/NAME`, which walks every open PR by the author, extracts each
+CodeRabbit body-only finding (outside-diff, additional), and looks for evidence it was closed:
+
+| status | meaning |
+|---|---|
+| `answered-with-commit` | a later comment names the path and a commit |
+| `answered` | a later comment names the path (or the finding's title) |
+| `likely` | the path changed in a commit after the finding — still worth a look |
+| `needs-review` | no evidence at all; someone must read the code |
+
+`needs-review` and `likely` rows are the backlog. Fix them, or close them with an evidence-backed
+comment; do not let "0 findings on the latest review" stand in for "no open work".
 
 ## 3. Never trust a summary of state
 
