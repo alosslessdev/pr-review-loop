@@ -72,6 +72,7 @@ Auditing every open PR for findings that later reviews stopped counting is its o
 | `references/loop-protocol.md` | full per-iteration protocol, commands, wording, failure modes |
 | `references/stacked-pr-split.md` | how to cut a 180-file PR into ten mergeable PRs, with the invariant checks |
 | `references/coordination.md` | findings registry, shared quotas, fan-out discipline, hand-offs |
+| `references/build-cache-and-disk.md` | sccache setup and disk hygiene when several PRs build at once |
 | `scripts/prstate.py` | compact live state for one PR (head, findings, threads, review decision, CI, blockers) |
 
 ## Licence

@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "4"
+  version: "5"
 ---
 
 # PR review loop
@@ -155,6 +155,15 @@ merges independently:
 
 `references/stacked-pr-split.md` carries the full playbook, including the replay problem (fixes made
 on the monolith after a slice forked) and why cherry-picks may be impossible.
+
+## 5b. Builds: cache them, and watch the disk
+
+Several PRs in parallel means several `target/` trees; the reference run filled the volume to 100% and
+a full disk corrupted cargo metadata in a way that reads like a code failure. Before a build:
+`df -h`. Use `sccache` (`RUSTC_WRAPPER`) with `CARGO_INCREMENTAL=0` and `CARGO_PROFILE_DEV_DEBUG=0`
+so a deleted `target/` does not cost a cold rebuild, one `target/` per worktree (never a shared
+`CARGO_TARGET_DIR` across concurrent agents), and delete a worktree's `target/` once that PR is at its
+stop condition. Details and the verified numbers: `references/build-cache-and-disk.md`.
 
 ## 6. Rules that keep the branch mergeable
 
