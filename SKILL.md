@@ -83,9 +83,10 @@ Full protocol, including the exact wording to use on PRs: `references/loop-proto
 
 ## 2b. Audit the whole backlog, not just the PR you were asked about
 
-A vanished finding is invisible per-PR: you have to look for it. Before declaring a repo clean, run
-`scripts/audit_prs.py --repo OWNER/NAME`, which walks every open PR by the author, extracts each
-CodeRabbit body-only finding (outside-diff, additional), and looks for evidence it was closed:
+A vanished finding is invisible per-PR: you have to look for it. Before declaring a repo clean, use
+the companion skill **pr-backlog-audit** (`audit_prs.py --repos OWNER/A,OWNER/B`), which walks every
+open PR by the author, extracts each CodeRabbit body-only finding (outside-diff, additional), and
+looks for evidence it was closed:
 
 | status | meaning |
 |---|---|

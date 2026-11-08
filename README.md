@@ -31,7 +31,6 @@ the live gate state.
 
 ```bash
 python scripts/prstate.py 1234 --repo owner/name      # one PR: state + blockers
-python scripts/audit_prs.py --repo owner/name         # every open PR: findings that were never closed
 ```
 
 ## What makes this different from "please fix the review"
@@ -59,6 +58,12 @@ python scripts/audit_prs.py --repo owner/name         # every open PR: findings 
   prove own-file disjointness, coverage equality, and "only the prerequisite creates the crate" before
   opening anything; close the monolith as superseded with the split map.
 
+## Companion skill
+
+Auditing every open PR for findings that later reviews stopped counting is its own skill:
+[pr-backlog-audit](https://github.com/alosslessdev/pr-backlog-audit)
+(`audit_prs.py --repos owner/a,owner/b`). Use it before reporting a repo as clean.
+
 ## Contents
 
 | Path | What |
@@ -68,7 +73,6 @@ python scripts/audit_prs.py --repo owner/name         # every open PR: findings 
 | `references/stacked-pr-split.md` | how to cut a 180-file PR into ten mergeable PRs, with the invariant checks |
 | `references/coordination.md` | findings registry, shared quotas, fan-out discipline, hand-offs |
 | `scripts/prstate.py` | compact live state for one PR (head, findings, threads, review decision, CI, blockers) |
-| `scripts/audit_prs.py` | backlog audit across open PRs: every body-only finding with closure evidence |
 
 ## Licence
 

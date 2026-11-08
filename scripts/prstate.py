@@ -78,26 +78,15 @@ reviewThreads(first:100){nodes{id isResolved isOutdated path line
   comments(first:40){nodes{id author{login} path line body createdAt url}}}}"""
 
 
-def main():
-    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if not argv:
-        print(__doc__)
-        return 2
-    pr = int(argv[0])
-    repo = resolve_repo(None)
-    if "--repo" in sys.argv:
-        repo = sys.argv[sys.argv.index("--repo") + 1]
-    if not repo:
-        print(json.dumps({"pr": pr, "error": "no repo (pass --repo or PR_REPO)"}))
-        return 2
-
-    me = gh("api", "user", "-q", ".login").strip()
+def gather(repo, pr, me=None):
+    """The state dict for one PR. Importable: audit tools build on this, not on argv."""
+    if me is None:
+        me = gh("api", "user", "-q", ".login").strip()
     skip = set(BOTS) | ({me} if me else set())
 
     pull = ghj("api", f"repos/{repo}/pulls/{pr}")
     if not pull:
-        print(json.dumps({"pr": pr, "repo": repo, "error": "not found"}))
-        return 1
+        return {"pr": pr, "repo": repo, "error": "not found"}
     sha = pull["head"]["sha"]
     owner, name = repo.split("/")
 
@@ -238,8 +227,24 @@ def main():
     if checklist["unchecked"]:
         b.append(f"checklist: {checklist['unchecked']} unchecked item(s) in the PR body")
 
+    return out
+
+
+def main():
+    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if not argv:
+        print(__doc__)
+        return 2
+    pr = int(argv[0])
+    repo = resolve_repo(None)
+    if "--repo" in sys.argv:
+        repo = sys.argv[sys.argv.index("--repo") + 1]
+    if not repo:
+        print(json.dumps({"pr": pr, "error": "no repo (pass --repo or PR_REPO)"}))
+        return 2
+    out = gather(repo, pr)
     print(json.dumps(out, indent=1))
-    return 0
+    return 0 if "error" not in out else 1
 
 
 if __name__ == "__main__":
