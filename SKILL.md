@@ -28,6 +28,12 @@ A PR is done only when **all** hold, re-read from the live API rather than remem
 Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —
 say so in the PR body and move on.
 
+**Outside-diff findings do not reappear.** They carry no thread, so a later review that only sees the
+changed files drops them from its counts while the defect is still in the code. Keep a ledger (the
+registry, or a PR comment) of every outside-diff and additional finding raised on the branch, and
+close each one by name — commit plus the sentence saying what changed. "The latest review says 0" is
+not evidence that an earlier body-only finding was fixed; check the code.
+
 ## 1b. Two gates that are not CodeRabbit
 
 **The maintainer's own gate.** A repo usually has a documented quality command —

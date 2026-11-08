@@ -123,6 +123,7 @@ work:
 |---|---|---|
 | `actionable: 0` but a finding is still open | newest review is an empty stub | aggregate counts per head, not per newest review |
 | Thread resolved, count unchanged | count is per review body, not state | record it as stale in the PR body and log |
+| An outside-diff finding silently disappears | later reviews only count findings in the changed files | keep a ledger of body-only findings and close each by commit; verify against the code, not the count |
 | CodeRabbit never re-reviews | skipped/paused/rate limited | `@coderabbitai resume` + `@coderabbitai full review`, one per head per window |
 | Two PRs fix the same defect differently | duplicated code across stacks | findings registry: claim before fixing |
 | CI red only on Windows | env lint, font glyphs, CRLF parity check | prove it pre-existing on `main`, record, rely on the Linux gate |
