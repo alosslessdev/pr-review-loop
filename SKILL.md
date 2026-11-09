@@ -50,8 +50,11 @@ exit codes and head SHA. Never tick an item on a partial run; never mark a step 
 "should" pass.
 
 **Human review state.** `CHANGES_REQUESTED` is a blocking gate even when every CodeRabbit count is
-zero. Read `reviewDecision` and each human review's state every iteration; an `APPROVED` from before
-your last push is stale. Reply *to the review* (not just a PR comment) and address the reviewer.
+zero — but only the **latest review per author** counts: an earlier request for changes is superseded
+when the same reviewer later approves or re-reviews. A tool that flags every historical
+`CHANGES_REQUESTED` will report three "blockers" on PRs that were approved weeks ago. Read
+`reviewDecision` where the repo enforces reviews, and otherwise take the newest review per reviewer.
+An `APPROVED` from before your last push is stale in the other direction. Reply *to the review* (not just a PR comment) and address the reviewer.
 
 **Fork CI is not green, it is absent.** A fork PR often shows only CodeRabbit in `gh pr checks`, with
 the combined status `pending` because `total_count` is 0 and the workflow runs sit in

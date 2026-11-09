@@ -185,7 +185,13 @@ def gather(repo, pr, me=None):
     }
 
     review_decision = (g.get("reviewDecision") or "").strip()
-    blocking_reviews = [r for r in human_reviews if (r.get("state") or "").upper() == "CHANGES_REQUESTED"]
+    # Only the *latest* review per author counts: an earlier CHANGES_REQUESTED is superseded by a
+    # later APPROVED (or by the same reviewer re-reviewing the new head).
+    latest_by_author = {}
+    for r in sorted(human_reviews, key=lambda r: r.get("at") or ""):
+        latest_by_author[(r.get("author") or "").lower()] = r
+    blocking_reviews = [r for r in latest_by_author.values()
+                        if (r.get("state") or "").upper() == "CHANGES_REQUESTED"]
     repo_checks = [c for c in runs if not c.get("name", "").lower().startswith("coderabbit")]
     wf_planned = [w for w in wf_runs if (w.get("conclusion") or "") == "action_required"]
     ci_absent = not repo_checks and (not wf_runs or len(wf_planned) == len(wf_runs))
