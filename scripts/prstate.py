@@ -8,7 +8,8 @@ Reports the things the loop actually gates on, and nothing that needs interpreta
   * unresolved review threads with their GraphQL ids (needed to resolve them);
   * human reviews and comments (excluding bots and yourself);
   * CI failures and pending checks on the head;
-  * mergeability, the GitHub review decision, and whether CI actually ran on this fork PR.
+  * mergeability (as information — conflicts are expected when the base moves fast), the GitHub review
+    decision, and whether CI actually ran on this fork PR.
 
 Anything that blocks a maintainer's approval is collected in `blockers`, so the loop can gate on a
 short list instead of re-deriving it from counts.
@@ -249,8 +250,8 @@ def gather(repo, pr, me=None):
         b.append("ci: " + ", ".join(c["name"] for c in out["ci"]["failed"]))
     if ci_absent:
         b.append("ci: no workflow ran on this head (action_required / empty status)")
-    if pull.get("mergeable") is False:
-        b.append("merge: conflicts with the base branch")
+    # Conflicts are ambient in a fast-moving repository: the base can move within hours, so a dirty
+    # branch is expected state, not a blocker. `mergeable` stays in the output as information.
     if checklist["unchecked"]:
         b.append(f"checklist: {checklist['unchecked']} unchecked item(s) in the PR body")
 

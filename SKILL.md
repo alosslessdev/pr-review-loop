@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "6"
+  version: "7"
 ---
 
 # PR review loop
@@ -23,7 +23,9 @@ A PR is done only when **all** hold, re-read from the live API rather than remem
   review that head until `@coderabbitai resume` is posted.
 - CI green on that head (no failed, no pending). A fork PR whose workflows sit in `action_required`
   is *not* a failure — record the local gate as evidence instead.
-- `mergeable` true with no conflicts against `main`.
+- Mergeable is **information, not a gate**: in a fast-moving repository the base can advance within
+  hours, so a branch showing conflicts is expected. Resolve conflicts when you need to push, when CI
+  cannot run without it, or when the maintainer asks — never as a reason to keep a loop alive.
 - Every human review/comment addressed: implemented, or answered with the commit that already does it.
 
 Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —
@@ -67,8 +69,9 @@ Iterate with a fixed interval (5 minutes is right: long enough for CI and CodeRa
 to react). Each iteration:
 
 1. Refresh state (see `scripts/prstate.py`).
-2. Fix conflicts: `git fetch origin main && git merge origin/main`, resolve preserving both intents,
-   fix merge fallout, run the gate, push. Never rebase or force-push a branch others build on.
+2. Conflicts, only when they block you: `git fetch origin main && git merge origin/main`, resolve
+   preserving both intents, fix merge fallout, run the gate, push. Do not chase a dirty branch that
+   has nothing else to do — it will go dirty again. Never rebase or force-push a branch others build on.
 3. Fix CodeRabbit findings — inline threads **and** body-only sections (`Outside diff range
    comments`, `Additional comments`, unverified findings). Reply in-thread with the fixing commit,
    then resolve the thread. A finding that is factually wrong gets an evidence-backed reply, then
