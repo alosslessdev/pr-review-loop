@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "5"
+  version: "6"
 ---
 
 # PR review loop
@@ -184,9 +184,28 @@ stop condition. Details and the verified numbers: `references/build-cache-and-di
 - Record each iteration in a log file per PR: head, commits, findings, gate results. Hand-offs are
   only useful if they are factual.
 
+## 6b. Stopping safely
+
+An agent can be stopped at any moment (budget, model switch, a human interrupt). Leave the branch in a
+state the next agent can resume without archaeology — the reference incident was a PR closed by its own
+agent nine seconds before it recorded the fix, so the fix was never reviewed.
+
+- **Never leave a half-applied edit.** Either finish the change and push it, or `git checkout -- .` and
+  record what you discarded. A worktree that does not compile is worse than no worktree.
+- **Unpushed commits are the same hazard**: a WIP commit in a worktree is invisible to everyone else.
+  Push it (fast-forward, even if incomplete) or drop it, and say which in the log.
+- **Write the hand-off before you stop** — head SHA, what is done, what is left, and the exact next
+  command. The next agent re-reads it; it must not have to infer state from a diff.
+- **Confirm PR state after every write.** `gh api repos/O/R/pulls/N --jq .state` should read `open`.
+  A CodeRabbit reply like "Pull request is closed" means you broke something, not that the bot is
+  flaky.
+
 ## 7. Do not
 
-- Do not close a PR, force-push a shared branch, or delete a test to make CI pass.
+- Do not close, merge, or reopen a PR — that is a maintainer action, and the author's token is usually
+  read-only upstream anyway. The writes you own are: push to the fork branch, comment, reply in a review
+  thread, resolve a thread, request a review, edit the body.
+- Do not force-push a shared branch, or delete a test to make CI pass.
 - Do not treat a green check run from a prerequisite's commit as your PR's review.
 - Do not let a "stable" report from another agent end your loop; re-read the live state.
 - Do not read images on a runtime that cannot accept image input; assert on artifacts in tests.

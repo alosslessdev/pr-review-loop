@@ -41,7 +41,9 @@ An owner that fixes it posts the commit; everyone else points.
 Managed CodeRabbit installations share an OSS review pool. Ten PRs requesting `full review` in
 parallel starve each other. Queue them:
 
-- One outstanding `@coderabbitai full review` across the whole set.
+- One outstanding `@coderabbitai full review` across the whole set — and **announce the claim**
+  (`write agent://all` "PR NNNN has claimed the review slot") so siblings do not queue behind a stale
+  assumption. Release it explicitly when the review lands or the request is refused.
 - Order by dependency (prerequisite first), then oldest un-reviewed head.
 - Before requesting, check the other PRs' CodeRabbit check runs; skip your turn if one is in
   progress.
