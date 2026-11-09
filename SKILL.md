@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "10"
+  version: "11"
 ---
 
 # PR review loop
@@ -39,9 +39,13 @@ see the note on mergeable below. Everything below elaborates those two points:
   review that head until `@coderabbitai resume` is posted.
 - CI green on that head (no failed, no pending). A fork PR whose workflows sit in `action_required`
   is *not* a failure — record the local gate as evidence instead.
-- Mergeable is **information, not a gate**: in a fast-moving repository the base can advance within
-  hours, so a branch showing conflicts is expected. Resolve conflicts when you need to push, when CI
-  cannot run without it, or when the maintainer asks — never as a reason to keep a loop alive.
+- Mergeable is **information, not a gate**, with one exception that matters operationally:
+  **ignore code conflicts, resolve Markdown/documentation conflicts.** Code conflicts are ambient when
+  the base moves every few hours and chasing them is busywork. Doc conflicts (`*.md`, parity tables,
+  ROADMAPs, changelogs) are cheap, usually chronological or generated, and a dirty branch can stop the
+  checks from running at all — so resolve those, regenerate generated docs inside the worktree
+  (`cargo xtask parity`, `cargo xtask keytips`), push, and let the checks run. Never let a doc conflict
+  keep a loop alive by itself, and never hand-edit a generated file.
 - Every human review/comment addressed: implemented, or answered with the commit that already does it.
 
 Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —

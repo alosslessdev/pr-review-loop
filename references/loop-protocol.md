@@ -18,8 +18,12 @@ that the author may be read-only on the upstream repository.
 1. **State.** `python prstate.py <PR>` (with `PR_REPO=<owner>/<repo>` when not the default). Read
    `cr.actionable`, `cr.outside_diff`, `cr.additional`, `unresolved_threads`, `ci.failed`,
    `ci.pending`, `mergeable`.
-2. **Conflicts first.** A dirty PR blocks everything else: `git fetch origin main && git merge
-   origin/main`, resolve keeping both intents, fix fallout, run the gate, push fast-forward.
+2. **Doc conflicts only.** Code conflicts with the base are expected in a fast-moving repo — ignore
+   them. Markdown conflicts (`*.md`, parity tables, ROADMAP, changelog, revision rows) must be resolved:
+   they are cheap, and a dirty branch can stop the checks from running. `git fetch origin main && git
+   merge origin/main`, resolve the doc files keeping both sides' entries in date order (never drop a
+   main-side fix), regenerate generated docs inside the worktree, run the gate, push fast-forward. If
+   only code conflicts remain, leave the branch alone and continue the review loop.
 3. **CodeRabbit.** Fix findings; reply with the fixing commit; resolve the thread. Body-only
    findings (outside-diff, additional, unverified) have no thread — record the fix in a PR comment.
 4. **CI.** `gh run view <run_id> --log-failed`; fix the cause; push.
