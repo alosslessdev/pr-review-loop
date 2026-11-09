@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "12"
+  version: "13"
 ---
 
 # PR review loop
@@ -17,13 +17,10 @@ A PR is done when — and only when — **two things are true**, re-read from th
 remembered:
 
 1. **Every GitHub check on the current head is green** — the repo's `gate`, CodeRabbit, SonarCloud,
-   and any other workflow. `pending` is not green, and neither is `action_required`. A check that
-   fails once must be fixed, not re-run until it passes.
-   **`skipped` is green only when the skip is external**: the repo's own configuration (SonarCloud
-   coverage shards are skipped by design), a fork PR awaiting maintainer approval, or a job that cannot
-   run because of an unresolved code conflict. A skip caused by the change itself — a path filter that
-   no longer matches, a job gated on a step that we disabled — is not green. When you accept a skip,
-   name its cause in the report; `prstate.py` lists them under `ci.skipped`.
+   and any other workflow. **`skipped` is fine** — what matters is that every check which actually
+   *ran* is green. `pending` is not green (wait it out), `action_required` is absent rather than green
+   (fork PRs need maintainer approval), and a check that failed once must be fixed, not re-run until it
+   passes.
 2. **CodeRabbit has been looped to clean** — all of:
    - every actionable comment addressed (0 actionable, 0 outside-diff, 0 additional on the head);
    - no new ones after the last review: the newest review is *on the current head*, so nothing is
@@ -44,13 +41,10 @@ see the note on mergeable below. Everything below elaborates those two points:
   review that head until `@coderabbitai resume` is posted.
 - CI green on that head (no failed, no pending). A fork PR whose workflows sit in `action_required`
   is *not* a failure — record the local gate as evidence instead.
-- Mergeable is **information, not a gate**, with one exception that matters operationally:
-  **ignore code conflicts, resolve Markdown/documentation conflicts.** Code conflicts are ambient when
-  the base moves every few hours and chasing them is busywork. Doc conflicts (`*.md`, parity tables,
-  ROADMAPs, changelogs) are cheap, usually chronological or generated, and a dirty branch can stop the
-  checks from running at all — so resolve those, regenerate generated docs inside the worktree
-  (`cargo xtask parity`, `cargo xtask keytips`), push, and let the checks run. Never let a doc conflict
-  keep a loop alive by itself, and never hand-edit a generated file.
+- Mergeable is **information, not a gate** — for code *and* docs. Both move every few hours here, so a
+  dirty branch is expected state and chasing it is busywork that produces a new head and discards a
+  green verdict. Merge only when a push is actually rejected, when CI cannot run without it, or when a
+  maintainer asks. Never let a conflict keep a loop alive.
 - Every human review/comment addressed: implemented, or answered with the commit that already does it.
 
 Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —
