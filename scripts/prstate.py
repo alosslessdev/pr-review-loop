@@ -120,7 +120,10 @@ def gather(repo, pr, me=None):
     # A paused review series stalls every PR in the stack: CodeRabbit says "reviews paused" at the
     # top of its summary and its check run reads "Review paused" / "Skipped". Only
     # `@coderabbitai resume` restarts it.
-    pause_re = re.compile(r"paused|rate limit|review skipped|reviews (?:are )?paused", re.I)
+    # "paused" is a series-level state the bot announces; "skipped"/"rate limited" just mean no review
+    # is possible right now (quota or nothing new), and a fresh head with no run yet is neither. Only
+    # the explicit pause needs `@coderabbitai resume`; everything else needs a review request.
+    pause_re = re.compile(r"\bpaused\b|reviews (?:are )?paused", re.I)
     run_paused = any(pause_re.search(((c.get("output") or {}).get("title") or "")
                                      + ((c.get("output") or {}).get("summary") or ""))
                      for c in cr_runs if c.get("status") == "completed")
