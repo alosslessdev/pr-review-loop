@@ -248,6 +248,8 @@ def gather(repo, pr, me=None):
         b.append("review: CHANGES_REQUESTED by " + ", ".join(r["author"] for r in blocking_reviews))
     if out["ci"]["failed"]:
         b.append("ci: " + ", ".join(c["name"] for c in out["ci"]["failed"]))
+    if out["ci"]["pending"]:
+        b.append("ci: still running — " + ", ".join(out["ci"]["pending"]))
     if ci_absent:
         b.append("ci: no workflow ran on this head (action_required / empty status)")
     # Conflicts are ambient in a fast-moving repository: the base can move within hours, so a dirty
