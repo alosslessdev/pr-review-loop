@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "9"
+  version: "10"
 ---
 
 # PR review loop
@@ -19,8 +19,14 @@ remembered:
 1. **Every GitHub check on the current head is green** — the repo's `gate`, CodeRabbit, SonarCloud,
    and any other workflow. `skipped` is fine (SonarCloud shards skip by design); `pending` is not, and
    neither is `action_required`. A check that fails once must be fixed, not re-run until it passes.
-2. **CodeRabbit has been looped to clean**: `review_state: final` on that head, 0 actionable /
-   outside-diff / additional, 0 open threads. Plus every human review/comment answered.
+2. **CodeRabbit has been looped to clean** — all of:
+   - every actionable comment addressed (0 actionable, 0 outside-diff, 0 additional on the head);
+   - no new ones after the last review: the newest review is *on the current head*, so nothing is
+     waiting to be reviewed;
+   - reviews are **unpaused** (`review_state: final`, or `in_progress` → wait; never `paused`);
+   - all threads resolved, each reply naming its fixing commit;
+   - **nitpick comments are ignored** — they never block, never need a reply, and are not counted.
+   Plus every human review/comment answered.
 
 Mergeability, conflicts with `main`, and whether a maintainer has merged are **not** part of "done" —
 see the note on mergeable below. Everything below elaborates those two points:
