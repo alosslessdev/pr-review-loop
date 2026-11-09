@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "11"
+  version: "12"
 ---
 
 # PR review loop
@@ -17,8 +17,13 @@ A PR is done when — and only when — **two things are true**, re-read from th
 remembered:
 
 1. **Every GitHub check on the current head is green** — the repo's `gate`, CodeRabbit, SonarCloud,
-   and any other workflow. `skipped` is fine (SonarCloud shards skip by design); `pending` is not, and
-   neither is `action_required`. A check that fails once must be fixed, not re-run until it passes.
+   and any other workflow. `pending` is not green, and neither is `action_required`. A check that
+   fails once must be fixed, not re-run until it passes.
+   **`skipped` is green only when the skip is external**: the repo's own configuration (SonarCloud
+   coverage shards are skipped by design), a fork PR awaiting maintainer approval, or a job that cannot
+   run because of an unresolved code conflict. A skip caused by the change itself — a path filter that
+   no longer matches, a job gated on a step that we disabled — is not green. When you accept a skip,
+   name its cause in the report; `prstate.py` lists them under `ci.skipped`.
 2. **CodeRabbit has been looped to clean** — all of:
    - every actionable comment addressed (0 actionable, 0 outside-diff, 0 additional on the head);
    - no new ones after the last review: the newest review is *on the current head*, so nothing is

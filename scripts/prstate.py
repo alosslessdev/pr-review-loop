@@ -232,6 +232,7 @@ def gather(repo, pr, me=None):
         "blockers": [],
         "ci": {
             "total": len(runs),
+            "skipped": [c["name"] for c in runs if c.get("conclusion") == "skipped"],
             "failed": [{"name": c["name"], "url": c["html_url"]} for c in runs
                        if c.get("conclusion") in ("failure", "timed_out", "cancelled", "action_required")],
             "pending": [c["name"] for c in runs if c.get("status") != "completed"],
