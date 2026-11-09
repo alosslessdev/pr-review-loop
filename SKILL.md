@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "13"
+  version: "14"
 ---
 
 # PR review loop
@@ -144,6 +144,38 @@ unchecked PR-template items. Gate on that list; it is the short form of everythi
 refuse to approve.
 
 Verify claims about other PRs the same way — a sibling's "done" is a claim, not evidence.
+
+## 3b. Human reviews are a work list, not a gate status
+
+Reviewers here post **AI-assisted "first-pass review notes"** as a `COMMENTED` review body — security,
+tests, API, UI, docs angles combined — ending with a verdict like "Needs changes" and a numbered list.
+They are not approvals and not CodeRabbit; treat them as tasks:
+
+- Read the review **in full** (`gh api repos/O/R/pulls/N/reviews`), then for **each** numbered point
+  decide against the **current head**: satisfied (reply with the commit or `file:line` that proves it),
+  missing (implement it, with a test where behavioural), or wrong/out of scope (say so with evidence).
+- A point marked "not certain" or "please verify" still needs a verdict — it is not permission to skip.
+- Then post `@<reviewer> ready` with the head SHA and a per-point status line. Reply to the *review*,
+  not just the PR, so it threads under their notes.
+- A review written against an older head is **stale but still unanswered**: verify each point against
+  the head and answer it; do not assume the code changed.
+- Track answered-ness mechanically: a human event with no author activity after it is unanswered.
+  `prstate.py` lists `human_reviews`/`human_comments` but not answered-ness — scan with
+  `human_scan.py`-style logic (reviews + conversation per PR, compare against the author's latest
+  comment) before declaring a repo clean.
+
+## 3c. Budgets, supervision, and cheap waiting
+
+- A subagent has a **soft request budget** (~200 requests) and is force-stopped when it is exceeded.
+  That is normal, not a failure: leave a **one-line hand-off** (head SHA, both halves' state) and get
+  respawned. Do not spend a turn re-deriving state.
+- **Do not poll inside an agent.** Polling burns the budget you need for fixes. Run the wait outside
+  (a bash loop over `prstate.py` that exits when a verdict or failure lands, or when everything is
+  settled) and wake an agent only when there is something to do.
+- The review-slot claim is **per organisation**: the gridcraft slot and the deckcraft slot are
+  independent. Announce claims per repo; yield to the oldest un-reviewed head in that repo only.
+- A model that rejects forced tool calls (`400 only "auto" is supported for tool_choice`) cannot run
+  these agents — the harness forces tool choice. Switch the subagent model rather than retrying.
 
 ## 4. Coordinate, do not duplicate
 
