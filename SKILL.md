@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "14"
+  version: "15"
 ---
 
 # PR review loop
@@ -45,10 +45,27 @@ see the note on mergeable below. Everything below elaborates those two points:
   dirty branch is expected state and chasing it is busywork that produces a new head and discards a
   green verdict. Merge only when a push is actually rejected, when CI cannot run without it, or when a
   maintainer asks. Never let a conflict keep a loop alive.
+- **The one hard exception: a conflicted PR runs no CI at all.** GitHub does not build the synthetic
+  merge ref for a `CONFLICTING` PR, so `pull_request` workflows are never created — there is no run to
+  be `action_required`, none to fail, none to approve. `gh pr checks` comes back empty and every
+  "no failed, no pending" reading is vacuously true while nothing has been tested. Verify with
+  `gh api repos/O/R/actions/runs?head_sha=<sha>` (empty = never ran) and `gh pr view N --json mergeable`.
+  When a branch is conflicted *and* you need a measured check (a coverage/duplication gate, a test that
+  has never run on the head), resolving is the only way to obtain evidence: merge `origin/main`,
+  resolve preserving both intents, keep the merge commit separate from feature work, and say in the PR
+  why. Resolve for no other reason.
 - Every human review/comment addressed: implemented, or answered with the commit that already does it.
 
 Nitpicks **never** block. A stale count in a review body whose threads are all resolved is not work —
 say so in the PR body and move on.
+
+**"Done" is a measurement on a head, never a conclusion you carry forward.** A verdict can land
+seconds after you report clean — this session produced two PRs declared green that immediately took 3
+and 2 new findings from a review already in flight. Never report from remembered counts: re-read
+`prstate.py` for the exact SHA you are about to name, and treat any review timestamped after your last
+push as new work. Equally, a body-only `Additional comments: N` or `Out of Scope Changes` section is
+work — answer it with a commit or with `file:line` evidence; do not let it sit because its thread
+count is 0.
 
 **Outside-diff findings do not reappear.** They carry no thread, so a later review that only sees the
 changed files drops them from its counts while the defect is still in the code. Keep a ledger (the
@@ -82,6 +99,24 @@ the combined status `pending` because `total_count` is 0 and the workflow runs s
 `action_required`. That means nothing ran. Say so explicitly, attach the local gate transcript, and
 do not record it as a pass.
 
+**A check that "runs" can also decline to do its job.** The SonarCloud workflow completes `success`
+while its log says `SONAR_TOKEN is not available (e.g. a fork pull request); skipping SonarCloud
+scan` — the app check then keeps reporting a number **pinned to an older SHA**. Two consequences:
+- A red Sonar/coverage number may be *stale*, not measured on your head. Read the workflow log and the
+  analysis timestamp before believing it; `11.4% duplication` measured five commits ago is not a
+  finding about this code.
+- Such a gate cannot be turned green from a fork PR. Record it as an infra blocker with the log line as
+  evidence, never as green, and never "fix" it by editing repo-wide quality config (`sonar.exclusions`,
+  `cpd.exclusions`) without an explicit user decision — propose the numbers and let them choose.
+
+**Approval you cannot give.** Before promising a fork run will go green, check
+`gh api repos/O/R --jq .permissions`. If the active account has only `pull`, every `action_required`
+run needs a maintainer click; say so once with the run IDs, stop retrying, and record it.
+
+**"Review completed with incomplete coverage"** is a completed verdict: 0 findings, 0 threads, accept it
+and carry the coverage caveat into the report. It is not the same state as `skipped`/`rate limited`,
+which carry no verdict at all.
+
 ## 2. Loop mechanics
 
 Iterate with a fixed interval (5 minutes is right: long enough for CI and CodeRabbit, short enough
@@ -107,6 +142,16 @@ to react). Each iteration:
 
 Budgets exist only to stop runaway loops; when the user raises one, the loop continues. Never yield
 because of budget or a request cap: leave a precise hand-off and keep the state recoverable.
+
+**A stopped agent is the single biggest source of lost work**, and it always fails the same way: a
+turn is cut between `edit` and `commit`, leaving verified fixes in a worktree — often a temp one
+(`C:/tmp/wt-…`) that can vanish. Rules that stop it:
+- Commit before any long reasoning, build or test run, not after. Small, frequent commits.
+- After every push, `git status --short` must be empty; a non-empty tree means the work is not safe.
+- On respawn, `git status` in each worktree **first**, before reading the review: uncommitted changes
+  are one turn from being lost, and they are worth more than the next finding.
+- Never keep a working tree inside a temp directory for long-lived work; keep it under the user's
+  workspace and only `CARGO_TARGET_DIR` in temp.
 
 Full protocol, including the exact wording to use on PRs: `references/loop-protocol.md`.
 
