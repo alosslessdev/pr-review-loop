@@ -50,6 +50,25 @@ parallel starve each other. Queue them:
 - A head whose only CR activity is `review rate limited` is not a failure: record it and keep the
   local gate green.
 
+### Slots are per repository, and collisions are normal
+
+The quota is shared per **organisation**, not across every repo you are working: a `storytold/gridcraft`
+holder does not block a `storytold/deckcraft` request. Announce claims as `repo #N head` so nobody has to
+infer it.
+
+Simultaneous claims happen whenever four agents wake on the same broadcast — this session produced three
+collisions in an hour. Resolve them deterministically, without a second round of negotiation:
+
+- **First claim wins.** Compare the announcement order (the message id is monotonic), not the head date.
+  A later claimer releases and waits, even if its head is older.
+- **The parent arbitrates and broadcasts a FIFO list** naming each pending claim, e.g.
+  `A #3556 → B #3413 → C #3599 → D #3412`. Siblings then take the slot in that order and stop claiming.
+- **A refusal is not a holder.** `Review rate limited` comes from the service; it tells you the pool is
+  empty, not that another agent holds the slot. Do not repost in a loop — wait for the window (about
+  45 minutes) or for the holder's release, then post **once**.
+- An agent that claims, does its fixes first, and only then requests wastes no quota; posting the request
+  early and fixing while it runs means the verdict covers the pre-fix head and you pay twice.
+
 ## Fan-out
 
 Parallel subagents are worth it when findings partition by file. Keep at every depth:
