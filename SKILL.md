@@ -2,7 +2,7 @@
 name: pr-review-loop
 description: Drive open pull requests to a machine-checked clean state — CodeRabbit findings, CI failures, merge conflicts and human review comments — with per-PR subagent loops, a shared findings registry, and a stacked-PR split playbook. Use when asked to resolve review comments on one or more PRs, to keep a PR green until review is done, or to split a monolithic PR into reviewable pieces.
 metadata:
-  version: "15"
+  version: "16"
 ---
 
 # PR review loop
@@ -25,10 +25,17 @@ remembered:
    - every actionable comment addressed (0 actionable, 0 outside-diff, 0 additional on the head);
    - no new ones after the last review: the newest review is *on the current head*, so nothing is
      waiting to be reviewed;
-   - reviews are **unpaused** (`review_state: final`, or `in_progress` → wait; never `paused`);
+   - reviews are **unpaused and settled**: `review_state: final` on the current head.
+     `in_progress` is a WAIT state, never a terminal one — run `scripts/wait_verdict.py`;
+     `paused` needs `@coderabbitai resume` first;
    - all threads resolved, each reply naming its fixing commit;
    - **nitpick comments are ignored** — they never block, never need a reply, and are not counted.
    Plus every human review/comment answered.
+
+**A `pending`, `in_progress`, `none`, or `paused` review state is never "done".** The waiter is
+`scripts/wait_verdict.py` (default **20,000 iterations**). Do not end a run, report clean, or hand off
+as finished while it reports `in_progress`: the verdict has not landed. A subagent's ~200-request soft
+cap is a trigger to hand off to the waiter or respawn — never a reason to call the PR clean.
 
 Mergeability, conflicts with `main`, and whether a maintainer has merged are **not** part of "done" —
 see the note on mergeable below. Everything below elaborates those two points:
@@ -138,7 +145,10 @@ to react). Each iteration:
    summary and its check run reads `Review paused` / `Skipped`. `prstate.py` reports this as
    `cr.review_state: "paused"` plus a blocker; resume, then request the full review. In a stack one
    pause can stall every PR, so sweep them (`pr-backlog-audit`'s `resume_paused.py`).
-7. Sleep the interval. Rate-limited waits are **free time** — they do not consume iterations.
+7. Wait with `scripts/wait_verdict.py` (outside the agent): it polls to a `final` verdict on the
+   target head with a **20,000-iteration** cap (default 300 s apart). Rate-limited waits are
+   **free time** — they do not consume iterations. An `in_progress`/`pending` answer at the cap is a
+   timeout, never a pass.
 
 Budgets exist only to stop runaway loops; when the user raises one, the loop continues. Never yield
 because of budget or a request cap: leave a precise hand-off and keep the state recoverable.
@@ -212,11 +222,12 @@ They are not approvals and not CodeRabbit; treat them as tasks:
 ## 3c. Budgets, supervision, and cheap waiting
 
 - A subagent has a **soft request budget** (~200 requests) and is force-stopped when it is exceeded.
-  That is normal, not a failure: leave a **one-line hand-off** (head SHA, both halves' state) and get
-  respawned. Do not spend a turn re-deriving state.
-- **Do not poll inside an agent.** Polling burns the budget you need for fixes. Run the wait outside
-  (a bash loop over `prstate.py` that exits when a verdict or failure lands, or when everything is
-  settled) and wake an agent only when there is something to do.
+  That is a hand-off trigger, not a finish line: never end with `review_state: in_progress`,
+  `pending`, `none`, or `paused`. Respawn, or hand the wait to `scripts/wait_verdict.py`.
+- **Do not poll inside an agent.** Polling burns the budget you need for fixes. Run
+  `scripts/wait_verdict.py --repo OWNER/NAME --pr N` outside the agent (default **20,000 iterations**,
+  300 s apart) and wake an agent only when the verdict lands or a check fails. The iteration cap is
+  a runaway stop, not a target.
 - The review-slot claim is **per organisation**: the gridcraft slot and the deckcraft slot are
   independent. Announce claims per repo; yield to the oldest un-reviewed head in that repo only.
 - A model that rejects forced tool calls (`400 only "auto" is supported for tool_choice`) cannot run
@@ -295,6 +306,9 @@ agent nine seconds before it recorded the fix, so the fix was never reviewed.
   Push it (fast-forward, even if incomplete) or drop it, and say which in the log.
 - **Write the hand-off before you stop** — head SHA, what is done, what is left, and the exact next
   command. The next agent re-reads it; it must not have to infer state from a diff.
+- **Never stop at `in_progress`.** A review in flight is not a clean PR and not a blocked one: it is a
+  wait. Leave the branch pushed and the waiter running (`scripts/wait_verdict.py`, up to 20,000
+  iterations); the verdict or a CI failure wakes the next agent.
 - **Confirm PR state after every write.** `gh api repos/O/R/pulls/N --jq .state` should read `open`.
   A CodeRabbit reply like "Pull request is closed" means you broke something, not that the bot is
   flaky.

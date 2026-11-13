@@ -38,6 +38,9 @@ python scripts/prstate.py 1234 --repo owner/name      # one PR: state + blockers
 - **An explicit stop condition.** Zero actionable / outside-diff / additional findings on the current
   head, zero open threads, a CodeRabbit run that completed `success` on that head, CI green,
   mergeable, human asks answered. Nitpicks never block.
+- **`in_progress` is a wait, not a finish.** The loop never reports clean while a verdict is in
+  flight; `scripts/wait_verdict.py` polls to `final` on the current head with a 20,000-iteration
+  budget, outside the agent's request cap.
 - **Blockers, not vibes.** `prstate.py` returns a `blockers` list — CodeRabbit counts, unresolved
   threads, `CHANGES_REQUESTED` reviews, failed checks, "no workflow ran on this head", merge
   conflicts, and unchecked PR-template items.
@@ -74,6 +77,7 @@ Auditing every open PR for findings that later reviews stopped counting is its o
 | `references/coordination.md` | findings registry, shared quotas, fan-out discipline, hand-offs |
 | `references/build-cache-and-disk.md` | sccache setup and disk hygiene when several PRs build at once |
 | `scripts/prstate.py` | compact live state for one PR (head, findings, threads, review decision, CI, blockers) |
+| `scripts/wait_verdict.py` | wait outside the agent until CodeRabbit is `final` on the head (20,000-iteration budget) |
 
 ## Licence
 

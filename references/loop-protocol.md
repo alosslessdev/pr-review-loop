@@ -5,7 +5,13 @@ that the author may be read-only on the upstream repository.
 
 ## Cadence and accounting
 
-- Interval: 300 s between iterations.
+- Interval: 300 s between iterations. Wait budget: **20,000 iterations**
+  (`scripts/wait_verdict.py`), a runaway stop rather than a target.
+- `in_progress`, `pending`, `none`, and `paused` are wait states, not outcomes. The loop does not end
+  and a PR is not "clean" until CodeRabbit reports `final` on the current head.
+- A subagent request cap (~200) is a hand-off trigger, never a reason to report done. Hand the wait to
+  `scripts/wait_verdict.py` outside the agent and wake an agent only when the verdict lands or a check
+  fails.
 - Budgets are safety caps, not goals. When the user raises the cap (2400 → 24000), the loop simply
   continues.
 - An iteration that only waits on a speed-limited CodeRabbit does **not** count; time spent waiting
@@ -37,6 +43,10 @@ that the author may be read-only on the upstream repository.
 # state
 python prstate.py 1234                     # default repo
 PR_REPO=owner/repo python prstate.py 1234
+
+# wait outside the agent (never report done at in_progress)
+python wait_verdict.py --repo OWNER/REPO --pr 1234              # final verdict on head
+python wait_verdict.py --repos OWNER/A,OWNER/B --until clean    # stop-condition wait
 
 # reply in a review thread (id from state output) then resolve it
 gh api repos/OWNER/REPO/pulls/1234/comments/<comment_id>/replies -f body="Fixed in <sha>: ..."
