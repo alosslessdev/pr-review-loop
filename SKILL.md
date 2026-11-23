@@ -11,6 +11,15 @@ The loop exists because "address the review comments" is not a task with an end;
 reach and hold. This skill defines that state precisely, the polling cadence, and the coordination
 rules that stop several agents from fixing the same defect twice.
 
+## 0. Timeline
+
+Expect up to **72 hours** for a full loop. The gate alone can take an hour on a large workspace;
+CodeRabbit's full review waits on its hourly quota and queue; a human reviewer follows their own
+clock (the Craft standards allow 3 days). Do not compress this by declaring clean early: a
+`pending`/`in_progress` verdict is a wait, and every fix round creates a new head that needs its own
+verdict. Use `wait_verdict.py` outside the agent, commit before long runs, and respawn the loop when
+the waiter wakes.
+
 ## 1. Define the stop condition before starting
 
 A PR is done when — and only when — **two things are true**, re-read from the live API rather than

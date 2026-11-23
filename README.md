@@ -33,6 +33,15 @@ the live gate state.
 python scripts/prstate.py 1234 --repo owner/name      # one PR: state + blockers
 ```
 
+## Timeline
+
+A loop is a multi-day process, not one sitting. A full workspace gate takes tens of minutes; a
+CodeRabbit full review waits on its hourly quota and queue; a human reviewer works on their own
+schedule (the Craft standards allow 3 days for a response). Plan for **up to 72 hours** from a dirty
+branch to a clean verdict on the current head. Keep the loop recoverable across sessions: commit
+before every long build, hand off with `prstate.py`, and let `wait_verdict.py` hold the wait outside
+the agent. A verdict that lands after your last push is new work, not a pass.
+
 ## What makes this different from "please fix the review"
 
 - **An explicit stop condition.** Zero actionable / outside-diff / additional findings on the current
