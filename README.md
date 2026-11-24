@@ -56,6 +56,10 @@ the agent. A verdict that lands after your last push is new work, not a pass.
 - **State is aggregated, not guessed.** CodeRabbit posts empty stub reviews after a real one; picking
   "the newest review" hides findings. `prstate.py` aggregates per head and cross-checks unresolved
   threads, so a stale body count is not mistaken for work.
+- **Run as the author.** Before any write, `gh auth switch --user <author>` and confirm
+  `gh api user --jq .login`. The switch is global, so a subagent can change it under you; a different
+  account's token cannot resolve the author's threads or close their PR, and comments show the wrong
+  name.
 - **Skipped ≠ clean.** `skipped`, `paused`, `rate limited` and "already reviewed" all mean the bot
   will not re-review on its own; only `@coderabbitai full review` re-triggers it. A **paused** series
   needs `@coderabbitai resume` first, and a new head — including a merge of `main` — does not unpause

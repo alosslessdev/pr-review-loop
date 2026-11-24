@@ -11,7 +11,22 @@ The loop exists because "address the review comments" is not a task with an end;
 reach and hold. This skill defines that state precisely, the polling cadence, and the coordination
 rules that stop several agents from fixing the same defect twice.
 
-## 0. Timeline
+## 0. Identity
+
+Every GitHub interaction — comments, review replies, `@coderabbitai` commands, thread resolution,
+closing, labels — must run as the PR's author. Before the first command and again after any shell or
+subagent that may have switched accounts:
+
+```bash
+gh auth switch --user <author>
+gh api user --jq .login        # must print <author>
+```
+
+`gh auth switch` is global to the host, so another agent switching accounts silently changes yours.
+A token for a different account cannot resolve that author's threads or close their PR (`FORBIDDEN`),
+and its comments carry the wrong name. Re-check identity before every write.
+
+## 0b. Timeline
 
 Expect up to **72 hours** for a full loop. The gate alone can take an hour on a large workspace;
 CodeRabbit's full review waits on its hourly quota and queue; a human reviewer follows their own
