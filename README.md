@@ -57,7 +57,9 @@ the agent. A verdict that lands after your last push is new work, not a pass.
   "the newest review" hides findings. `prstate.py` aggregates per head and cross-checks unresolved
   threads, so a stale body count is not mistaken for work.
 - **Skipped ≠ clean.** `skipped`, `paused`, `rate limited` and "already reviewed" all mean the bot
-  will not re-review on its own; only `@coderabbitai full review` re-triggers it.
+  will not re-review on its own; only `@coderabbitai full review` re-triggers it. A **paused** series
+  needs `@coderabbitai resume` first, and a new head — including a merge of `main` — does not unpause
+  it. `wait_verdict.py` exits 3 on a paused head instead of waiting out its budget.
 - **One owner per defect.** Findings that repeat across stacked PRs are claimed in a registry before
   being fixed; everyone else points at the owner's commit. Duplicate code is acceptable, duplicate
   fixes are not.

@@ -36,7 +36,8 @@ remembered:
      waiting to be reviewed;
    - reviews are **unpaused and settled**: `review_state: final` on the current head.
      `in_progress` is a WAIT state, never a terminal one — run `scripts/wait_verdict.py`;
-     `paused` needs `@coderabbitai resume` first;
+     `paused` needs `@coderabbitai resume` first, and a new head — including a merge of `main` — does
+     not unpause it;
    - all threads resolved, each reply naming its fixing commit;
    - **nitpick comments are ignored** — they never block, never need a reply, and are not counted.
    Plus every human review/comment answered.
@@ -140,7 +141,8 @@ to react). Each iteration:
 
 1. Refresh state (see `scripts/prstate.py`).
 2. Conflicts, only when they block you: `git fetch origin main && git merge origin/main`, resolve
-   preserving both intents, fix merge fallout, run the gate, push. Do not chase a dirty branch that
+   preserving both intents, fix merge fallout, run the gate, push. After the push run step 6 before
+   any wait: a merge head often arrives with the review series paused. Do not chase a dirty branch that
    has nothing else to do — it will go dirty again. Never rebase or force-push a branch others build on.
 3. Fix CodeRabbit findings — inline threads **and** body-only sections (`Outside diff range
    comments`, `Additional comments`, unverified findings). Reply in-thread with the fixing commit,
@@ -148,12 +150,15 @@ to react). Each iteration:
    resolution.
 4. Fix CI failures from their logs (`gh run view <id> --log-failed`), never by weakening a test.
 5. Handle human reviews: implement each point, reply bullet-by-bullet, post `@<reviewer> ready`.
-6. CodeRabbit liveness: skipped/paused/rate-limited means it will not re-review on its own. Only
-   `@coderabbitai full review` re-triggers a review; `@coderabbitai review` is ignored. **A paused
-   series needs `@coderabbitai resume` first** — CodeRabbit says "reviews paused" at the top of its
-   summary and its check run reads `Review paused` / `Skipped`. `prstate.py` reports this as
-   `cr.review_state: "paused"` plus a blocker; resume, then request the full review. In a stack one
-   pause can stall every PR, so sweep them (`pr-backlog-audit`'s `resume_paused.py`).
+6. CodeRabbit liveness, after **every** push — including a merge of `main`: a new head does not
+   unpause the series. A paused series never restarts by itself; a plain `@coderabbitai review` is
+   ignored while paused, and `wait_verdict.py` cannot settle it. Check `cr.review_state`; if
+   `paused`, post `@coderabbitai resume`, wait for the bot's "Reviews resumed", then post
+   `@coderabbitai full review`, and only then run the waiter. If the state is `skipped`, `none` or
+   `rate limited`, post `@coderabbitai full review` once per head (only that command re-triggers;
+   `@coderabbitai review` does not). `prstate.py` reports `paused` plus a blocker, and
+   `wait_verdict.py` exits 3 on a paused head instead of burning its budget. In a stack one pause can
+   stall every PR, so sweep them (`pr-backlog-audit`'s `resume_paused.py`).
 7. Wait with `scripts/wait_verdict.py` (outside the agent): it polls to a `final` verdict on the
    target head with a **20,000-iteration** cap (default 300 s apart). Rate-limited waits are
    **free time** — they do not consume iterations. An `in_progress`/`pending` answer at the cap is a

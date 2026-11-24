@@ -11,7 +11,10 @@ simply stopped watching. Run this instead:
 
 Exit 0 = every watched PR reached the requested state (default: a `final`
 CodeRabbit verdict on its current head). Exit 2 = the iteration cap was hit;
-that is a timeout, never a pass. Exit 1 = bad arguments / API failure.
+that is a timeout, never a pass. Exit 3 = a watched PR's CodeRabbit series is
+paused and `--resume` was not given: resume the series, then run the waiter
+again. A paused series never restarts by itself, so waiting on it only burns
+the budget. Exit 1 = bad arguments / API failure.
 
 Defaults are deliberately large: 20,000 iterations at 300 s is the loop's wait
 budget, not a request budget. A subagent's ~200-request soft cap never
@@ -113,6 +116,7 @@ def main(argv=None):
           f"max_iterations={a.max_iterations}", flush=True)
 
     last = {}
+    resumed_heads = set()
     for i in range(1, a.max_iterations + 1):
         states, all_settled = [], True
         for repo, pr in targets:
@@ -123,8 +127,21 @@ def main(argv=None):
                 continue
             s = summarize(st)
             states.append((repo, pr, s))
-            if a.resume and s["paused"] and not a.once:
-                post(repo, pr, "@coderabbitai resume")
+            if s["paused"]:
+                head = s["head"]
+                if not a.resume:
+                    print(f"\n{repo}#{pr} head {head}: CodeRabbit reviews are PAUSED. "
+                          f"A paused series never restarts by itself, so this waiter would "
+                          f"wait forever. Post '@coderabbitai resume' (or re-run with "
+                          f"--resume), then run the waiter again.", file=sys.stderr, flush=True)
+                    return 3
+                if (repo, pr, head) not in resumed_heads:
+                    if not post(repo, pr, "@coderabbitai resume"):
+                        print(f"{repo}#{pr}: could not post '@coderabbitai resume'",
+                              file=sys.stderr, flush=True)
+                        return 1
+                    resumed_heads.add((repo, pr, head))
+                    print(f"{repo}#{pr}: posted '@coderabbitai resume' on {head}", flush=True)
             if not settled(s, a.until):
                 all_settled = False
 
